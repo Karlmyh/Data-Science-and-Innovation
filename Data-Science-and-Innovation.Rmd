@@ -1,0 +1,605 @@
+---
+title: "Salary Analysis in AI Industry in China"
+author: "Yuheng Ma"
+date: "6/29/2019"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+subtitle: "Data Science and Innovation Course Project"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Artificial intelligence is a frontier technology that causes disruptive changes in many fields. Today's artificial intelligence technology takes machine learning, especially deep learning, as the core, develops rapidly in visual, voice, natural language and other application fields, and has begun to empower various industries like hydropower and coal. The AI industry, especially algorithms positions, is one of the highest paid industries in China, attracting the attention of many graduates. In this report, we use R to get information about 3600 positions in 8 types and apply data analysis methods to find out what features make a high-paid AI position.
+
+## Crawler
+
+All information is from https://www.lagou.com. Crawler needs Rselenium, whose instruction is attached.
+```{r}
+library(stringr)
+library(xml2)
+library(RSelenium)
+library(rvest)
+
+############################################ function of logging into account
+login<-function(){
+  # click login button
+  xpath5<-'//*[@id="lg_tbar"]/div/ul/li[1]/a'
+  btn5 <- remDr$findElement(using = 'xpath', value = xpath5)
+  remDr$mouseMoveToLocation(webElement = btn5)
+  remDr$click()
+  xpath0<-'/html/body/section/div[2]/div[1]/div[1]/ul/li[2]'
+  btn0 <- remDr$findElement(using = 'xpath', value = xpath0)
+  # move mouse and click
+  remDr$mouseMoveToLocation(webElement = btn0)
+  # click
+  remDr$click()
+  # input number
+  xpath1<-'/html/body/section/div[2]/div[1]/div[3]/form/div[1]/input'
+  btn1 <- remDr$findElement(using = 'xpath', value = xpath1)
+  # type number
+  text1 <- 'xxxxxxxxxxx'
+  btn1$sendKeysToElement(text1)
+  # pause
+  Sys.sleep(4)
+  # get code
+  xpath4<-'/html/body/section/div[2]/div[1]/div[3]/form/div[3]/div/input[2]'
+  btn4 <- remDr$findElement(using = 'xpath', value = xpath4)
+  remDr$mouseMoveToLocation(webElement = btn4)
+  remDr$click()
+  # input code
+  xpath2<-'/html/body/section/div[2]/div[1]/div[3]/form/div[3]/div/input[1]'
+  btn2 <- remDr$findElement(using = 'xpath', value = xpath2)
+  text2 <- readline('input code')
+  btn2$sendKeysToElement(text2)
+  Sys.sleep(4)
+  # click button
+  xpath3<-'/html/body/section/div[2]/div[1]/div[3]/form/div[5]/input'
+  btn3 <- remDr$findElement(using = 'xpath', value = xpath3)
+  remDr$mouseMoveToLocation(webElement = btn3)
+  remDr$click()
+}
+############################################ function to get data
+crawler<-function(url0,url1,filename){
+    # set browser
+    remDr = remoteDriver('localhost',4444L,browserName='chrome')
+    remDr$open()
+    remDr$navigate(url1)
+    # not necessarily need to
+    #login()
+    # find page
+    remDr$navigate(url0)
+    tpage <- remDr$getPageSource()
+    pageSource <- tpage[[1]]
+    web <- read_html(pageSource)
+    # find total page number
+    pgcttxt <- web %>% html_nodes('div.item_con_pager') %>% 
+      html_nodes('div')%>%html_nodes('a:nth-child(5)')%>% html_text()
+    pgct = as.numeric(pgcttxt)
+    setwd('/Users/mayuheng/Desktop')
+    # innitializing
+    name=salary=require=location=time=company=companysituation=companyintro=tags=NULL
+    data=data.frame(name,location,salary,require,time,company,companysituation,
+                    companyintro, tags)
+    for(i in 1:pgct)
+    {
+      url <- paste(url0,i,"/?filterOption=2",sep = '')
+      web <- read_html(url)
+
+      name <- c(name,web %>% html_nodes('div.position') %>% 
+                  html_nodes('div.p_top') %>% html_nodes('a') %>%
+                  html_nodes('h3') %>%html_text())
+
+      location <- c(location,web %>% html_nodes('div.position') %>% 
+                      html_nodes('div.p_top') %>% html_nodes('a') %>%
+                      html_nodes('span') %>%html_nodes('em') %>%html_text())
+
+      salary <- c(salary,web %>% html_nodes('div.position') %>% 
+                    html_nodes('div.p_bot') %>% html_nodes('div') %>%
+                    html_nodes('span') %>%html_text())
+      # simple data clean
+      require<- 
+      c(require, web %>%html_nodes(xpath="//li[@class]/div[1]/div[1]/div[2]/div/text()")
+                  %>%html_text())
+      require<-require[require!="\n                                    "]
+      require<-gsub(" ","",require)
+      require<-gsub("\n","",require)
+
+      time<- c(time,web %>% html_nodes('div.position') %>% 
+                 html_nodes('div.p_top') %>% html_nodes('span') %>%html_text())
+      time<-time[grepl("[0-9]",time)]
+
+      company <- c(company,web %>% html_nodes('div.company') %>% 
+                     html_nodes('div.company_name') %>% html_nodes('a') %>%
+                     html_text())
+
+      companysituation <- c(companysituation,web %>% html_nodes('div.company') %>% 
+                              html_nodes('div.industry') %>% 
+                              html_text())
+      companysituation<-gsub("\n","",companysituation)
+      companysituation<-gsub(" ","",companysituation)
+
+      companyintro <- c(companyintro,web %>% html_nodes('div.li_b_r') %>% 
+                          html_text())
+
+      tags<- c(tags, web %>% html_nodes("div.list_item_bot")
+               %>% html_nodes("div.li_b_l")
+               %>%html_text())
+      tags<-gsub("\n","/",tags)
+      tags<-gsub(" ","",tags)
+      # data from everypage is stored in pracdata
+      pracdata<-data.frame(name,location,salary,require,time,company,companysituation,companyintro,tags)
+      print(pracdata)
+      # combine
+      data<-rbind(data,pracdata)
+      name=salary=require=location=time=company=companysituation=companyintro=tags=NULL
+      # if needs speed up, time seperation can be set small but may cause requirement to log in.
+      #if(###)login()
+      #Sys.sleep(0.5)
+
+      x1<-runif(1,3,10)
+      Sys.sleep(x1)
+    }
+    # close browser
+    remDr$closeWindow()
+    # output data
+    write.table(data,file='filename.txt')
+    write.csv(data,file='filename.csv')
+}
+```
+
+## Data Clean
+
+Data cleaning process, data set is stored in sorteddata.csv.
+
+```{r message=FALSE, warning=FALSE}
+library("lubridate",quietly = TRUE,warn.conflicts = FALSE,attch)
+library("VIM",quietly = TRUE,warn.conflicts = FALSE)
+library("mice",quietly = TRUE,warn.conflicts = FALSE)
+setwd("/Users/mayuheng/Documents/GitHub/Data-Science-and-Innovation")
+# import data
+shenduxuexidata<-read.csv('data/shenduxuexidata.csv',
+                          fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+jiqixuexidata<-read.csv('data/jiqixuexidata.csv',
+                        fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+tuxiangchulidata<-read.csv('data/tuxiangchulidata.csv',
+                           fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+tuxiangshibiedata<-read.csv('data/tuxiangshibiedata.csv',
+                            fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+yuyinshibiedata<-read.csv('data/yuyinshibiedata.csv',
+                          fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+jiqishijuedata<-read.csv('data/jiqishijuedata.csv',
+                         fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+suanfagongchengshidata<-read.csv('data/suanfagongchengshidata.csv',
+                                 fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+ziranyuyanchulidata<-read.csv('data/ziranyuyanchulidata.csv',
+                              fileEncoding = "UTF-8",stringsAsFactors=FALSE)
+data<-list(shenduxuexidata=shenduxuexidata,jiqixuexidata=jiqixuexidata,
+           tuxiangchulidata=tuxiangchulidata,tuxiangshibiedata=tuxiangshibiedata,
+           yuyinshibiedata=yuyinshibiedata,jiqishijuedata=jiqishijuedata,
+           suanfagongchengshidata=suanfagongchengshidata,
+           ziranyuyanchulidata=ziranyuyanchulidata)
+data1<-cbind(belong=rep(names(data[1]),nrow(data[[1]])),data[[1]])
+for(i in 2:8){data1<-rbind(data1,cbind(belong=rep(names(data[i]),
+                                                  nrow(data[[i]])),data[[i]]))}
+data=data1
+sorteddata<-list(NULL)
+  city<-NULL
+  district<-NULL
+  lowsalary<-NULL
+  highsalary<-NULL
+  experience<-NULL
+  degree<-NULL
+  isday<-NULL
+  companyfield<-NULL
+  companymembers<-NULL
+  companyfinancial<-NULL
+  today<-Sys.Date()
+  temp<-NULL
+  index<-NULL
+```
+```{r}
+  # process location
+    temp<-strsplit(data[[4]],split='·') 
+    for(i in 1:nrow(data)){
+    city<-c(city,temp[[i]][[1]])
+    if(length(temp[[i]])==2){
+    district<-c(district,temp[[i]][[2]])
+    }
+    else{
+      district<-c(district,"city")
+      index<-c(index,i)
+    }}
+    temp<-NULL
+```
+```{r message=FALSE, warning=FALSE}
+  # process salary
+  temp<-strsplit(data[[5]],split='-') 
+  for(j in 1:nrow(data)){
+    
+    lowsalary<-c(lowsalary,as.numeric(chartr("K"," ",chartr("k"," ",temp[[j]][[1]]))))
+    if(length(temp[[j]])==2){
+    highsalary<-c(highsalary,as.numeric(chartr("K"," ",chartr("k"," ",temp[[j]][[2]]))))
+    }
+    else{
+      highsalary<-c(highsalary,as.numeric(chartr("K"," ",chartr("k"," ",temp[[j]][[1]]))))
+      index<-c(index,j)
+    }
+  }
+```
+```{r}
+  # process topics
+levels(data$belong)<-c("深度学习","机器学习","图像处理","图像识别","语音识别","机器视觉","算法工程师","自然语言处理")
+```
+
+
+```{r}
+  # process requirement
+  temp<-strsplit(data[[6]],split='/') 
+  for(j in 1:nrow(data)){
+    experience<-c(experience,temp[[j]][[1]])
+    degree<-c(degree,temp[[j]][[2]])
+  }
+```
+```{r message=FALSE}
+  # process company
+  temp<-strsplit(data[['companysituation']],split='/') 
+  for(j in 1:nrow(data)){
+    if(length(temp[[j]])==3){
+    companyfield<-c(companyfield,temp[[j]][[1]])
+    companyfinancial<-c(companyfinancial,temp[[j]][[2]])
+    companymembers<-c(companymembers,temp[[j]][[3]])
+    }
+    else{
+      companyfield<-c(companyfield,"blank")
+      companyfinancial<-c(companyfinancial,"blank")
+      companymembers<-c(companymembers,"blank")
+      index<-c(index,j)
+    }
+  }
+```
+```{r}
+  # into a form
+sorteddata<-data.frame(belong=data[['belong']],name=data[['name']],
+              city=city,district=district,lowsalary=lowsalary,highsalary=highsalary,
+              experience=experience,degree=degree,company=data[['company']],
+              companyintroduction=data[['companyintro']],companyfield=companyfield,
+              companyfinancial=companyfinancial,companymembers=companymembers,
+              tags=data[['tags']])
+  # check omit
+  aggr(sorteddata, prop=FALSE, numbers=TRUE,plot = TRUE)
+  # abandon omit
+data<-na.omit(sorteddata)
+data<-data[-index,]
+  # seperate key words
+field<-NULL
+tag<-NULL
+for(i in 1:nrow(data)){
+field=c(field,strsplit(chartr("、"," ",chartr(","," ",data$companyfield[[i]]))," ")) }
+for(i in 1:nrow(data)){
+temp=strsplit(chartr("/"," ",data$tags[[i]])," ")[[1]][c(strsplit(chartr("/"," ",data$tags[[i]])," ")[[1]]!="")] 
+tag=c(tag,list(temp))
+}
+data$companyfield<-field
+data$tags<-tag 
+  # average salary
+data$salary=(data$highsalary+data$lowsalary)/2
+```
+```{r}
+data
+```
+
+## Data Analysis
+
+In this section we analyze washed data in different aspect.
+
+```{r message=FALSE}
+library(ggplot2)
+Majorcity<-table(data$city)[table(data$city)>mean(as.vector(table(data$city)))]
+Majorcity
+```
+By listing out cities providing positions that is more than average, we can see that there are five major cities providing more than 90% positions for AI, which is the same as expected.
+```{r}
+citydata<-data[data[["city"]]%in%names(Majorcity),] 
+citydata$salary=(citydata$lowsalary+citydata$highsalary)/2
+ggplot(citydata,aes(x=city,y=salary),position="jitter",family="STKaiti")+geom_boxplot(notch = TRUE)+ scale_size_area() +xlab("city")+ stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="white")+theme(text = element_text(family='STKaiti'))
+```
+
+Box plot shows that Beijing not only provide most positions, also holds highest average salary. Hangzhou and Guangzhou are relatively worse for AI. 
+
+```{r}
+ggplot(citydata,aes(x=salary))+geom_density() +facet_wrap(vars(citydata$city),nrow=2)+
+  theme(text = element_text(family='STKaiti'))
+```
+
+Distributions of salary shows it is similar that salary behaves like normal (or exponential), which says most of jobs are of high repeatability and low innovation. Beijing and Shenzhen performs better in jobs with high salary (over 50k per mouth). Since I like north, we specifically explore positions in Beijing.
+
+```{r}
+beijingdata<-data[as.vector(data[["city"]])=="北京",] 
+beijingdata$district<-as.character(beijingdata$district)
+quantile(as.vector(table(beijingdata$district)))
+```
+
+Form above stated that positions, in different region of Beijing, are also highly clustered.  
+
+```{r}
+beijingdata<-beijingdata[beijingdata$district%in%names(table(beijingdata$district)[table(beijingdata$district)>20]),]
+table(beijingdata$district)
+```
+
+Locations above are found to be in several specific district, namely Haidian and Chaoyang. Distributions of salary after setting them back are as follows. 
+
+```{r}
+beijingdata$district[beijingdata$district%in%c("北京大学","上地","五道口","西北旺","西二旗","西三旗","学院路","知春路","中关村","海淀区")]="haidian district"
+beijingdata$district[beijingdata$district%in%c("大望路","酒仙桥","望京","朝阳区")]="chaoyang district"
+ggplot(beijingdata,aes(x=district,y=salary))+geom_violin()+scale_size_area()
+```
+
+
+```{r}
+haidian<-beijingdata[beijingdata$district%in%c("haidian district"),]
+chaoyang<-beijingdata[beijingdata$district%in%c("chaoyang district"),]
+t.test(haidian$salary,chaoyang$salary)
+```
+No specific difference is shown. Next we focus on topic, namely fields in artificial intellegence. Graph below tells significant distinguishment between topics.
+
+```{r}
+ggplot(data,aes(x=data$belong,y=salary))+geom_boxplot()+theme(text = element_text(family='STKaiti'))
+```
+
+```{r}
+quant<-NULL
+for(i in 1:8){quant<- c(quant,quantile(data$salary[data$belong==names(table(data$belong))[i]])[4])}
+quant<-data.frame(quant)
+row.names(quant)=levels(data$belong)
+quant
+```
+
+75% quantile of salaries of computer vision and image processing are far lower than others. Next we focus on requirement of jobs, basically experience and degrees of applicants. Plot below is relationship between experience, degree and salary.
+```{r}
+data
+```
+
+
+
+```{r}
+data$degree=factor(data$degree,levels = c("不限","大专","本科","硕士","博士"),labels =c("whatever","college","university","master","docter"))
+data$experience=factor(data$experience,c("经验不限","经验应届毕业生","经验1年以下","经验1-3年","经验3-5年","经验5-10年","经验⼗年以上"),labels = c("whatever","graduating","lessthan 1 year","1-3 years","3-5 years","5-10 years","10+ years "))
+ggplot(data,aes(x=experience,y=salary,color=degree))+geom_jitter()+geom_point()+scale_color_manual(values = c("red","orange", "yellow", "green","blue"))
+```
+
+```{r warning=FALSE}
+ggplot(data,aes(x=degree,y=salary,color=experience))+geom_jitter()+geom_point()+scale_color_manual(values = c("red", "orange","yellow","green","blue","purple"))
+```
+
+
+In general, salary goes up as experience goes up, which also works for level of degree. Several interesting observations can be made as following. 
+
+
+* No apparent difference between salaries of graduating students and people who has experience less than 1 year. Which makes sense because 1 year generally makes no difference. HRs also don't usually set 1 year as a bar and as a result, number of positions is fewer.
+* Programs without degree restriction range widly on salary and doesn't neccessarily perform worse than those with bars. These programs consist of three types: 
+    + Extremely demanding ones that they don't need experience to do filtration, for instance those with top salary, requiring masters or PhD degree. 
+    + Programs who wish to draw more people and have more choices. 
+    + Jobs with low bars, typically repeatable and simple ones. 
+* University graduates are majority of job fulfillers, which also take up most mid-level salaries.
+* Master students only avoid lowest salaries and receive same level of money with university greduates.
+* PhD students are kings of job market, receiving extremely high salaries. On the other hand, less job opportunities are provided for them. High gains with high risk.
+* College graduates receive lowst salary. It's reasonable.
+* Programs without bars on degrees are with generally low salaries，which is different from the situation in experience. One guess for this is that even smartest people have their freshmen period, but degrees can always be obtained if people want. This means amoung people with any experience there are smart, qualified people, but a person without a proper degree is nearly impossible to be outstanding. Thus degree is a better variable to distinguish people. 
+
+
+In order to evaluate effects of these two variable, we transform different requirement into numerical variable, namely time needed to meet this requirement, for further use. We set no requirement as NA to avoid noise.
+
+```{r}
+data$exp=as.numeric(data$exp)
+data$exp[data$experience=="whatever"]=NA
+data$exp[data$experience=="graduate"]=0
+data$exp[data$experience=="lessthan1"]=0.5
+data$exp[data$experience=="1-3"]=1
+data$exp[data$experience=="3-5"]=3
+data$exp[data$experience=="5-10"]=5
+data$exp[data$experience=="10+"]=10
+data$deg=as.numeric(data$deg)
+data$deg[data$degree=="whatever"]=NA
+data$deg[data$degree=="college"]=2
+data$deg[data$degree=="university"]=4
+data$deg[data$degree=="master"]=6
+data$deg[data$degree=="docter"]=9
+```
+
+Now we turn our eyes to company side. First check main area.
+
+```{r message=FALSE, warning=FALSE}
+library("wordcloud")
+wordcloud(unlist(data$companyfield),scale = c(4,0.8),family="STKaiti")
+```
+
+As we see, Internet crushed others. Next we look at company's financial situation. We assign financing round, which is factors with levels None, Angel, A, B, C, D+ and Listed, to random amount of financing in a rational range using uniform distribution. Range are relatively subjective, grabed from Google and financial forums.
+
+```{r message=FALSE, warning=FALSE}
+data$companyfinancial=factor(data$companyfinancial,levels = c("不需要融资","未融资","天使轮","A轮","B轮","C轮","D轮及以上","上市公司"),labels = c("noneed","notyet","angel","A","B","C","D+","listed"))
+data=na.omit(data)
+data$companyfin<-0
+data$companyfin[data$companyfinancial=="noneed"]=NA
+data$companyfin[data$companyfinancial=="notyet"]=0
+data$companyfin[data$companyfinancial=="angel"]=80*runif(sum(na.omit(data$companyfinancial=="angel")))+20
+data$companyfin[data$companyfinancial=="A"]=800*runif(sum(na.omit(data$companyfinancial=="A")))+200
+data$companyfin[data$companyfinancial=="B"]=4000*runif(sum(na.omit(data$companyfinancial=="B")))+1000
+data$companyfin[data$companyfinancial=="C"]=5000*runif(sum(na.omit(data$companyfinancial=="C")))+5000
+data$companyfin[data$companyfinancial=="D+"]=50000*runif(sum(na.omit(data$companyfinancial=="D+")))+10000
+data$companyfin[data$companyfinancial=="listed"]=400000*runif(sum(na.omit(data$companyfinancial=="listed")))+60000
+data$companyfin=as.numeric(data$companyfin)
+ggplot(na.omit(data), aes(x=companyfin, y=salary, color=companyfinancial)) + geom_point(size=2)+scale_color_manual(values = c("red", "orange","yellow","green","blue","purple","pink"))+scale_x_log10()
+```
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(viridis)
+library(ggridges)
+library(ggplot2)
+ggplot(data, aes(x = salary, y = companyfinancial, fill = companyfinancial)) +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position = "none")
+```
+
+```{r}
+cor.test(data$salary,data$companyfin)
+```
+
+Correlation shows that with p value e-06 that company financial results in salary. We next do same process for population of company.
+
+```{r}
+data$companymembers=droplevels(data$companymembers,"blank")
+data$companymembers=factor(data$companymembers,levels=c(levels(data$companymembers)[6],levels(data$companymembers)[1],levels(data$companymembers)[4],levels(data$companymembers)[2],levels(data$companymembers)[5],levels(data$companymembers)[3]),labels=c("1-15","15-50","50-150","150-500","500-2000","2000+"),ordered = TRUE)
+#data=na.omit(data)
+data$companymem<-0
+data$companymem[data$companymembers=="1-15"]=sample(1:15,sum(na.omit(data$companymembers=="1-15")),replace = TRUE)
+data$companymem[data$companymembers=="15-50"]=sample(15:50,sum(na.omit(data$companymembers=="15-50")),replace = TRUE)
+data$companymem[data$companymembers=="50-150"]=sample(50:150,sum(na.omit(data$companymembers=="50-150")),replace = TRUE)
+data$companymem[data$companymembers=="150-500"]=sample(150:500,sum(na.omit(data$companymembers=="150-500")),replace = TRUE)
+data$companymem[data$companymembers=="500-2000"]=sample(500:2000,sum(na.omit(data$companymembers=="500-2000")),replace = TRUE)
+data$companymem[data$companymembers=="2000+"]=sample(2000:6000,sum(na.omit(data$companymembers=="2000+")),replace = TRUE)
+data$companymem=as.numeric(data$companymem)
+
+ggplot(na.omit(data), aes(x=companymem, y=salary, color=companymembers)) + geom_point(size=2)+scale_color_manual(values = c("red", "orange","yellow","green","blue","purple"))+scale_x_log10()
+```
+
+```{r}
+cor.test(data$salary,data$companymem)
+```
+
+There is also significant relation in between. Next we examine what kind of self-promotion reflect a higher salary. We take a wild guess that it might relate to how much a company introduce itself.
+
+```{r}
+data$companyintroduction<-as.character(data$companyintroduction)
+data$introlength=nchar(data$companyintroduction)
+ggplot(data,aes(y=salary,x=introlength))+geom_point()+geom_jitter()
+```
+
+```{r}
+cor.test(data$salary,data$introlength)
+```
+
+```{r}
+for (i in 1:nrow(data)){data$tag[i]=length(data$tags[[i]])}
+data$tag<-as.numeric(data$tag)
+cor.test(data$salary,data$tag)
+```
+
+Both length of self-introduction and numbers of tags are irrelavant. Wild guess fails. Finally, we examine correlation between these variables.
+
+```{r}
+library(corrplot)
+cordata<-data[c("salary","companyfin","companymem","tag","introlength","exp","deg")]
+cordata<-na.omit(cordata)
+confdata<-cor.mtest(cordata)
+corrplot(cor(cordata),p.mat =confdata$p,sig.level=0.005)
+```
+
+Note that even though we set significant level to 0.005, which is a rarely small value, most of data we just examined are correlated with salary, and some with each other. 
+
+From cor-plot, information despite with salary is as follows:
+* Company members and financial round grows together, denoted as large company.
+* Large companys require more on working experience.
+* Larger company talks less.
+* Degree requirements and experience requirements are somehow opposite. Years spent on improving oneself, no matter working or studying, are equavalent. One with poor degree needs to be well-experienced to get same salary with a Ivy graduate.
+
+Lastly, we commit multiple linear regression.
+
+```{r}
+linear<- lm(salary~companyfin+companymem+tag+introlength+exp+deg,data=cordata) 
+summary(linear)
+```
+
+Apparently some variables need to be removed.
+
+```{r}
+step(linear)
+```
+
+
+The remaining variables are as expected and at last:
+
+```{r}
+linear<-step(linear) 
+confint(linear,level = 0.95)
+```
+
+```{r}
+linear<-lm(data$salary~data$companymem+data$exp+data$deg)
+summary(linear)
+```
+
+This is with extremely small p value, which means reliability. Yet R square is small, meaning that fitting is roughly done. Residuals analysis are as follows
+
+```{r}
+fit=lm(data$salary~data$exp+data$companyfin+data$companymem)
+par(mfrow=c(2,2))
+plot(fit)
+```
+
+Well, we can leave this aside. We tend to picture different types of company and thus do a cluster classification. We first normalize these data to avoid influence of data scale.
+
+```{r}
+cordata<-data[c("companyfin","companymem")]
+normalize<-function(a){
+  for(i in 1:ncol(a)){
+      b=a[,i]
+      b=(b-min(b,na.rm = TRUE))/(max(b,na.rm = TRUE)-min(b,na.rm = TRUE))
+      a[,i]=b
+  }
+  na.omit(a)
+}
+cordata<-normalize(cordata)
+cordata
+```
+
+```{r message=FALSE, warning=FALSE}
+library(plyr)
+library(cluster)
+library(lattice)
+library(graphics)
+wss <- numeric(10) 
+for (k in 1:10) wss[k] <- sum(kmeans(cordata, centers=k, nstart=25)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters", ylab="Within Sum of Squares") 
+```
+```{r}
+set.seed(111)
+km = kmeans(cordata,3, nstart=25)
+cordata$type=km$cluster
+ggplot(cordata,aes(x=companyfin,y=companymem,color=type))+geom_point()+geom_jitter()
+```
+
+```{r}
+km
+```
+
+Also, we can look at companies in the three types in general.
+
+```{r message=FALSE, warning=FALSE}
+word=data$company[km[["cluster"]]==1]
+wordcloud(word,scale = c(4,0.8),family="STKaiti")
+word=data$company[km[["cluster"]]==2]
+wordcloud(word,scale = c(4,0.8),family="STKaiti")
+word=data$company[km[["cluster"]]==3]
+wordcloud(word,scale = c(4,0.8),family="STKaiti")
+```
+
+
+Pictures of company are as follows.
+* With a small group of staff and low level of finance, start-up companies. Note that some of the employers are project group or sub-companies of some famous companies.
+* With a great amount of money, many listed company.
+* With a large group of staff but didn't get listed or at beginner level of finance, representing well-developed big company that didn't choose financing.
+
+
+
+
+
+
+
