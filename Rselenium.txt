@@ -1,0 +1,11 @@
+Instruction for RSelenium
+
+Run following code in Command Line, then run crawler.
+
+docker kill $(docker ps -a -q)　　
+docker stop $(docker ps -a -q)
+docker rm $(docker ps -a -q)
+docker pull selenium/hub
+docker pull selenium/node-chrome
+docker run -d -p 4444:4444 --name selenium-hub selenium/hub
+docker run -d --link selenium-hub:hub -v /dev/shm:/dev/shm selenium/node-chrome
